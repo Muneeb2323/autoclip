@@ -62,7 +62,7 @@ set "PATH=%~dp0bin;%PATH%"
 
 :check_venv
 :: 4. Check / Create Virtual Environment (.venv)
-if exist ".venv\Scripts\python.exe" goto :check_env
+if exist ".venv\Scripts\python.exe" goto :install_deps
 echo [*] Setting up Python virtual environment (.venv)...
 python -m venv .venv
 if errorlevel 1 (
@@ -70,9 +70,10 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo [*] Installing dependencies from requirements.txt...
-.venv\Scripts\python.exe -m pip install --upgrade pip
-.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+:install_deps
+echo [*] Checking dependencies from requirements.txt...
+.venv\Scripts\python.exe -m pip install --prefer-binary -r requirements.txt
 if errorlevel 1 (
     echo [ERROR] Failed to install dependencies.
     pause
