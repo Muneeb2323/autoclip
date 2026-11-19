@@ -109,7 +109,6 @@ def _ydl(opts):
     cookies = config.env("PEAKCUT_COOKIES_FILE") or (config.ROOT / "cookies.txt")
     if Path(cookies).is_file():
         base["cookiefile"] = str(cookies)
-        base["extractor_args"] = {"youtube": {"player_client": ["android", "ios", "web"]}}
     return yt_dlp.YoutubeDL({**base, **opts})
 
 
