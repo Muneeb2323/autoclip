@@ -13,33 +13,99 @@ for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v Path 2^>nul') do set
 for /f "tokens=2*" %%a in ('reg query "HKLM\System\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYSPATH=%%b"
 set "PATH=%USERPATH%;%SYSPATH%;%PATH%;%~dp0bin"
 
-:: 2. Check for Python
-where python >nul 2>nul
-if errorlevel 1 goto :install_python
-goto :check_ffmpeg
+:: 2. Find working Python (avoids Microsoft Store 0-byte dummy stub)
+set "PY_CMD="
+
+:: Check if standard python actually executes code
+python -c "import sys; exit(0)" >nul 2>&1
+if not errorlevel 1 (
+    set "PY_CMD=python"
+    goto :python_found
+)
+
+:: Check if Windows Python launcher (py.exe) works
+py -3 -c "import sys; exit(0)" >nul 2>&1
+if not errorlevel 1 (
+    set "PY_CMD=py -3"
+    goto :python_found
+)
+
+:: Check common Python installation paths directly
+if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
+    set "PY_CMD=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    set "PATH=%LOCALAPPDATA%\Programs\Python\Python312;%LOCALAPPDATA%\Programs\Python\Python312\Scripts;%PATH%"
+    goto :python_found
+)
+if exist "%ProgramFiles%\Python312\python.exe" (
+    set "PY_CMD=%ProgramFiles%\Python312\python.exe"
+    set "PATH=%ProgramFiles%\Python312;%ProgramFiles%\Python312\Scripts;%PATH%"
+    goto :python_found
+)
+if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+    set "PY_CMD=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;%PATH%"
+    goto :python_found
+)
+if exist "%ProgramFiles%\Python311\python.exe" (
+    set "PY_CMD=%ProgramFiles%\Python311\python.exe"
+    set "PATH=%ProgramFiles%\Python311;%ProgramFiles%\Python311\Scripts;%PATH%"
+    goto :python_found
+)
+
+:: If not found, attempt install via winget
+goto :install_python
 
 :install_python
-echo [!] Python is not found in PATH.
+echo [!] Python is not installed or intercepted by Microsoft Store shortcut.
 where winget >nul 2>nul
 if errorlevel 1 goto :python_manual
-echo [*] Installing Python 3.12 via winget...
+
+echo [*] Installing official Python 3.12 via winget...
 winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements
+
+:: Reload PATH and check standard locations
 for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USERPATH=%%b"
 for /f "tokens=2*" %%a in ('reg query "HKLM\System\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYSPATH=%%b"
 set "PATH=%USERPATH%;%SYSPATH%;%PATH%"
-where python >nul 2>nul
-if not errorlevel 1 goto :check_ffmpeg
+
+if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
+    set "PY_CMD=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    set "PATH=%LOCALAPPDATA%\Programs\Python\Python312;%LOCALAPPDATA%\Programs\Python\Python312\Scripts;%PATH%"
+    goto :python_found
+)
+if exist "%ProgramFiles%\Python312\python.exe" (
+    set "PY_CMD=%ProgramFiles%\Python312\python.exe"
+    set "PATH=%ProgramFiles%\Python312;%ProgramFiles%\Python312\Scripts;%PATH%"
+    goto :python_found
+)
+py -3 -c "import sys; exit(0)" >nul 2>&1
+if not errorlevel 1 (
+    set "PY_CMD=py -3"
+    goto :python_found
+)
+python -c "import sys; exit(0)" >nul 2>&1
+if not errorlevel 1 (
+    set "PY_CMD=python"
+    goto :python_found
+)
 
 :python_manual
+echo.
+echo ========================================================
 echo [ERROR] Python 3.10+ is required.
-echo Please download and install Python from: https://www.python.org/downloads/
-echo Note: Make sure to check "Add Python to PATH" during installation.
+echo.
+echo 1. Download official Python from: https://www.python.org/downloads/
+echo 2. IMPORTANT: Check the box "Add Python to PATH" during install!
+echo 3. Also disable the Windows Store dummy shortcut in:
+echo    Settings ^> Apps ^> Advanced app settings ^> App execution aliases
+echo    (Turn OFF "App Installer - python.exe" and "python3.exe")
+echo ========================================================
 pause
 exit /b 1
 
-:check_ffmpeg
+:python_found
 :: 3. Check for FFmpeg
-where ffmpeg >nul 2>nul
+ffmpeg -version >nul 2>&1
 if errorlevel 1 goto :install_ffmpeg
 goto :check_venv
 
@@ -52,7 +118,7 @@ winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-a
 for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USERPATH=%%b"
 for /f "tokens=2*" %%a in ('reg query "HKLM\System\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYSPATH=%%b"
 set "PATH=%USERPATH%;%SYSPATH%;%PATH%"
-where ffmpeg >nul 2>nul
+ffmpeg -version >nul 2>&1
 if not errorlevel 1 goto :check_venv
 
 :download_portable_ffmpeg
@@ -64,9 +130,9 @@ set "PATH=%~dp0bin;%PATH%"
 :: 4. Check / Create Virtual Environment (.venv)
 if exist ".venv\Scripts\python.exe" goto :install_deps
 echo [*] Setting up Python virtual environment (.venv)...
-python -m venv .venv
+%PY_CMD% -m venv .venv
 if errorlevel 1 (
-    echo [ERROR] Failed to create virtual environment.
+    echo [ERROR] Failed to create virtual environment using %PY_CMD%.
     pause
     exit /b 1
 )
