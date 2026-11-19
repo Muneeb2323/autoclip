@@ -98,9 +98,19 @@ class _Quiet:
 def _ydl(opts):
     import yt_dlp
     # a channel or playlist link is answered as "a list" straight away, never walked video by video
-    return yt_dlp.YoutubeDL({"noplaylist": True, "quiet": True, "no_warnings": True, "logger": _Quiet(),
-                             "extract_flat": "in_playlist", "playlistend": 1, "socket_timeout": 20,
-                             "concurrent_fragment_downloads": 4, **opts})
+    base = {
+        "noplaylist": True, "quiet": True, "no_warnings": True, "logger": _Quiet(),
+        "extract_flat": "in_playlist", "playlistend": 1, "socket_timeout": 30,
+        "concurrent_fragment_downloads": 4,
+    }
+    proxy = config.env("PEAKCUT_PROXY") or config.env("HTTPS_PROXY") or config.env("HTTP_PROXY")
+    if proxy:
+        base["proxy"] = proxy
+    cookies = config.env("PEAKCUT_COOKIES_FILE") or (config.ROOT / "cookies.txt")
+    if Path(cookies).is_file():
+        base["cookiefile"] = str(cookies)
+        base["extractor_args"] = {"youtube": {"player_client": ["android", "ios", "web"]}}
+    return yt_dlp.YoutubeDL({**base, **opts})
 
 
 def _video_format(height):
